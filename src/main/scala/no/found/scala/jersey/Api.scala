@@ -110,7 +110,8 @@ object Api {
     path: String = "/",
     tags: String = "",
     notes: String = "",
-    nickname: String = ""
+    nickname: String = "",
+    sudoRequired: Boolean = false
   )
 
   object Parameters {
