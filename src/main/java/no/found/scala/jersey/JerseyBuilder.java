@@ -45,12 +45,6 @@ public class JerseyBuilder {
         return swagger;
     }
 
-    private interface MethodOp {
-        Method method();
-
-        Api.Op op();
-    }
-
     private static List<Api.Op> getOps(TopLevel topLevel) {
         List<Api.Op> methods = new ArrayList<>();
         for ( Method method : topLevel.getClass().getMethods() ) {
