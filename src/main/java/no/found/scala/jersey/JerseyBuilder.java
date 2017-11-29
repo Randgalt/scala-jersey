@@ -15,10 +15,9 @@ import java.util.concurrent.TimeUnit;
 
 public class JerseyBuilder {
     public static Resource buildResource(TopLevel topLevel) {
-        Api.Meta topDescription = topLevel.meta();
-        Resource.Builder resourceBuilder = Resource.builder(topDescription.path());
+        Resource.Builder resourceBuilder = Resource.builder(topLevel.path());
         getOps(topLevel).forEach(op -> resourceBuilder
-                .addChildResource(op.meta().path())
+                .addChildResource(op.op().path())
                 .addMethod()
                 .httpMethod(op.method())
                 .suspended(AsyncResponse.NO_TIMEOUT, TimeUnit.MILLISECONDS)
@@ -36,10 +35,10 @@ public class JerseyBuilder {
                 Operation operation = new Operation();
                 operation.addConsumes(MediaType.APPLICATION_JSON);
                 operation.addProduces(MediaType.APPLICATION_JSON);
-                operation.setOperationId(topLevel.meta().nickname());
+                operation.setOperationId(topLevel.nickname());
                 Path path = new Path();
                 path.set(op.method().toLowerCase(), operation);
-                swagger.path(op.meta().nickname(), path);
+                swagger.path(op.op().nickname(), path);
             });
         });
         return swagger;
@@ -49,8 +48,8 @@ public class JerseyBuilder {
         List<Api.OpBase> methods = new ArrayList<>();
         for ( Method method : topLevel.getClass().getMethods() ) {
             try {
-                if ( Api.Op.class.isAssignableFrom(method.getReturnType()) ) {
-                    Api.Op op = (Api.OpBase)method.invoke(topLevel);
+                if ( Api.Operation.class.isAssignableFrom(method.getReturnType()) ) {
+                    Api.Operation op = (Api.OpBase)method.invoke(topLevel);
                     if ( op instanceof Api.OpBase ) {
                         methods.add((Api.OpBase)op);
                     }
