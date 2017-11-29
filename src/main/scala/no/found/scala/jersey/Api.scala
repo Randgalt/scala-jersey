@@ -33,7 +33,7 @@ object Api {
   sealed trait Op
 
   //noinspection NotImplementedCode
-  private[jersey] sealed abstract class OpBase[T, E](
+  protected[jersey] sealed abstract class OpBase[T, E](
     val method: String,
     val meta: Meta,
     val entityTag: Option[TypeTag[E]],
