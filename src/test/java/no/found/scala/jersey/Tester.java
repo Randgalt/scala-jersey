@@ -1,7 +1,5 @@
 package no.found.scala.jersey;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import io.swagger.models.Swagger;
 import org.glassfish.jersey.CommonProperties;
 import org.glassfish.jersey.client.ClientConfig;
 import org.glassfish.jersey.jackson.JacksonFeature;
@@ -13,7 +11,6 @@ import scala.Option;
 
 import javax.ws.rs.client.Entity;
 import javax.ws.rs.core.Application;
-import java.util.Collections;
 
 public class Tester extends JerseyTest {
     @Test
@@ -37,13 +34,6 @@ public class Tester extends JerseyTest {
 
     @Override
     protected Application configure() {
-        Swagger swagger = JerseyBuilder.buildSwagger(Collections.singletonList(new ApiResource()));
-        try {
-            System.out.println(JacksonObjectMapperProvider.mapper.writeValueAsString(swagger));
-        } catch (JsonProcessingException e) {
-            e.printStackTrace();
-        }
-
         ResourceConfig resourceConfig = new ResourceConfig();
         resourceConfig.registerResources(JerseyBuilder.buildResource(new ApiResource()));
         resourceConfig.register(JacksonMarshallingFeature.class);

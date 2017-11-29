@@ -1,23 +1,19 @@
 package no.found.scala.jersey;
 
-import io.swagger.models.Operation;
-import io.swagger.models.Path;
-import io.swagger.models.Swagger;
-import no.found.scala.jersey.Api.TopLevel;
+import no.found.scala.jersey.Routes.TopLevel;
 import org.glassfish.jersey.server.model.Resource;
+import scala.collection.JavaConverters;
 
 import javax.ws.rs.container.AsyncResponse;
 import javax.ws.rs.core.MediaType;
-import java.lang.reflect.Method;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.Collection;
 import java.util.concurrent.TimeUnit;
 
 public class JerseyBuilder {
     public static Resource buildResource(TopLevel topLevel) {
         Resource.Builder resourceBuilder = Resource.builder(topLevel.path());
-        getOps(topLevel).forEach(op -> resourceBuilder
-                .addChildResource(op.op().path())
+        getRoutes(topLevel).forEach(op -> resourceBuilder
+                .addChildResource(op.path())
                 .addMethod()
                 .httpMethod(op.method())
                 .suspended(AsyncResponse.NO_TIMEOUT, TimeUnit.MILLISECONDS)
@@ -27,6 +23,7 @@ public class JerseyBuilder {
                 .handledBy(new JerseyScalaInflector(op), JerseyScalaInflector.method));
         return resourceBuilder.build();
     }
+/*
 
     public static Swagger buildSwagger(List<TopLevel> topLevels) {
         Swagger swagger = new Swagger();
@@ -42,22 +39,10 @@ public class JerseyBuilder {
         });
         return swagger;
     }
+*/
 
-    private static List<Api.OpBase> getOps(TopLevel topLevel) {
-        List<Api.OpBase> methods = new ArrayList<>();
-        for ( Method method : topLevel.getClass().getMethods() ) {
-            try {
-                if ( Api.Operation.class.isAssignableFrom(method.getReturnType()) ) {
-                    Api.Operation op = (Api.OpBase)method.invoke(topLevel);
-                    if ( op instanceof Api.OpBase ) {
-                        methods.add((Api.OpBase)op);
-                    }
-                }
-            } catch (Exception e) {
-                throw new RuntimeException(e);
-            }
-        }
-        return methods;
+    private static Collection<Routes.Route> getRoutes(TopLevel topLevel) {
+        return JavaConverters.asJavaCollectionConverter(topLevel.routes()).asJavaCollection();
     }
 
     private JerseyBuilder() {
