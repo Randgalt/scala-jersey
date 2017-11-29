@@ -5,13 +5,12 @@ import scala.Option;
 import scala.concurrent.Future;
 
 import javax.ws.rs.container.AsyncResponse;
-import javax.ws.rs.container.ContainerRequestContext;
 import javax.ws.rs.core.Context;
 import javax.ws.rs.core.MultivaluedMap;
 import java.lang.reflect.Method;
 
 public class JerseyScalaInflector {
-    private final Api.Op op;
+    private final Api.OpBase op;
 
     static final Method method;
     static {
@@ -23,7 +22,7 @@ public class JerseyScalaInflector {
         }
     }
 
-    JerseyScalaInflector(Api.Op op) {
+    JerseyScalaInflector(Api.OpBase op) {
         this.op = op;
     }
 
@@ -35,11 +34,11 @@ public class JerseyScalaInflector {
         if (op.hasEntity()) {
             Class aClass = op.entityClass();
             Object entity = request.readEntity(aClass);
-            Api.Entity parameters = Api.Parameters$.MODULE$.apply(Option.apply(entity), queryParams, pathParams);
-            future = op.apply(parameters);
+            Api.RequestMeta requestMeta = Api.RequestMeta$.MODULE$.apply(Option.apply(entity), queryParams, pathParams);
+            future = op.apply(requestMeta);
         } else {
-            Api.Parameters parameters = Api.Parameters$.MODULE$.apply(queryParams, pathParams);
-            future = op.apply(parameters);
+            Api.RequestMeta requestMeta = Api.RequestMeta$.MODULE$.apply(queryParams, pathParams);
+            future = op.apply(requestMeta);
         }
         op.complete(future, response);
     }

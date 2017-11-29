@@ -9,14 +9,13 @@ import scala.concurrent.{ExecutionContext, Future}
 import scala.util.control.NonFatal
 
 object Api {
+
   import reflect.runtime.universe.TypeTag
 
-  sealed trait MetaData {
-    def meta(): AuthzMetadata
-  }
+  sealed trait RequestMeta[E] {
+    def auth(): AuthzMetadata
 
-  sealed trait Parameters {
-    def meta: MetaData
+    def entity(): Option[E] = None
 
     def segment(name: String): Option[String] = None
 
@@ -31,31 +30,26 @@ object Api {
     def queryAsDouble(name: String): Option[Double] = None
   }
 
-  sealed trait Entity[E] extends Parameters {
-    def entity(): Option[E] = None
-  }
+  sealed trait Op
 
-  sealed trait Op[T, E] {
-    def method: String
+  //noinspection NotImplementedCode
+  private[jersey] sealed abstract class OpBase[T, E](
+    val method: String,
+    val meta: Meta,
+    val entityTag: Option[TypeTag[E]],
+    block: RequestMeta[E] => Future[T],
+    implicit val ec: ExecutionContext
+  ) extends Op {
+    def apply(requestMeta: RequestMeta[E]): Future[T] = block(requestMeta)
 
-    def description: Description
+    def entityClass(): Class[_] = entityTag.map(tag => tag.mirror.runtimeClass(tag.tpe.typeSymbol.asClass)).getOrElse(throw new UnsupportedOperationException)
 
-    def hasEntity: Boolean
-
-    def ec: ExecutionContext
-
-    def apply(parameters: Parameters): Future[T] = Future.failed(new UnsupportedOperationException)
-
-    def apply(parameters: Entity[E]): Future[T] = Future.failed(new UnsupportedOperationException)
-
-    def entityTag: TypeTag[E] = throw new UnsupportedOperationException
-
-    def entityClass: Class[_] = entityTag.mirror.runtimeClass(entityTag.tpe.typeSymbol.asClass)
+    val hasEntity: Boolean = entityTag.isDefined
 
     def complete(future: Future[T], response: AsyncResponse): Unit = {
-      implicit val localEc: ExecutionContext = ec
       future.map {
         case r: Response => response.resume(r)
+        case entityStatus: EntityStatusResponse[T] => response.resume(Response.status(entityStatus.statusCode).entity(entityStatus.entity).build())
         case status: StatusResponse => response.resume(Response.status(status.statusCode).build())
         case entity @ _ => response.resume(Response.ok(entity).build())
       }
@@ -65,62 +59,42 @@ object Api {
     }
   }
 
-  sealed class GetOp[T](val description: Description, block: Parameters => Future[T], val ec: ExecutionContext) extends Op[T, Any] {
-    def get(parameters: Parameters): Future[T] = block(parameters)
+  private class GetOp[T](meta: Meta, block: RequestMeta[Any] => Future[T], ec: ExecutionContext)
+    extends OpBase[T, Any]("GET", meta, None, block, ec)
 
-    override def apply(parameters: Parameters): Future[T] = get(parameters)
+  private class PutOp[T, E](meta: Meta, block: RequestMeta[E] => Future[T], ec: ExecutionContext)(implicit val tag: TypeTag[E])
+    extends OpBase[T, E]("PUT", meta, Some(tag), block, ec)
 
-    override def method: String = "GET"
+  private class PostOp[T, E](meta: Meta, block: RequestMeta[E] => Future[T], ec: ExecutionContext)(implicit val tag: TypeTag[E])
+    extends OpBase[T, E]("POST", meta, Some(tag), block, ec)
 
-    override def hasEntity: Boolean = false
-  }
+  private class DeleteOp[T](meta: Meta, block: RequestMeta[Any] => Future[T], ec: ExecutionContext)
+    extends OpBase[T, Any]("DELETE", meta, None, block, ec)
 
-  sealed class PutOp[T, E](val description: Description, block: Entity[E] => Future[T], val ec: ExecutionContext)(override implicit val entityTag: TypeTag[E]) extends Op[T, E] {
-    def put(parameters: Entity[E]): Future[T] = block(parameters)
-
-    override def apply(parameters: Entity[E]): Future[T] = put(parameters)
-
-    override def method: String = "PUT"
-
-    override def hasEntity: Boolean = true
-  }
-
-  sealed class PostOp[T, E](val description: Description, block: Entity[E] => Future[T], val ec: ExecutionContext)(override implicit val entityTag: TypeTag[E]) extends Op[T, E] {
-    def post(parameters: Entity[E]): Future[T] = block(parameters)
-
-    override def apply(parameters: Entity[E]): Future[T] = post(parameters)
-
-    override def method: String = "POST"
-
-    override def hasEntity: Boolean = true
-  }
-
-  sealed class DeleteOp[T](val description: Description, block: Parameters => Future[T], val ec: ExecutionContext) extends Op[T, Any] {
-    def delete(parameters: Parameters): Future[T] = block(parameters)
-
-    override def apply(parameters: Parameters): Future[T] = delete(parameters)
-
-    override def method: String = "DELETE"
-
-    override def hasEntity: Boolean = false
-  }
-
-  case class Description(
+  case class Meta(
     description: String,
     path: String = "/",
     tags: String = "",
     notes: String = "",
     nickname: String = "",
     sudoRequired: Boolean = false
-  )
+  )(implicit ec: ExecutionContext) {
+    def get[T](block: RequestMeta[Any] => Future[T]): Op = new GetOp[T](this, block, ec)
 
-  object Parameters {
-    def apply[E](query: MultivaluedMap[String, String], path: MultivaluedMap[String, String]): Parameters = apply(
+    def put[T, E](block: RequestMeta[E] => Future[T])(implicit tag: TypeTag[E]): Op = new PutOp[T, E](this, block, ec)
+
+    def post[T, E](block: RequestMeta[E] => Future[T])(implicit tag: TypeTag[E]): Op = new PostOp[T, E](this, block, ec)
+
+    def delete[T](block: RequestMeta[Any] => Future[T]): Op = new DeleteOp[T](this, block, ec)
+  }
+
+  object RequestMeta {
+    def apply(query: MultivaluedMap[String, String], path: MultivaluedMap[String, String]): RequestMeta[Any] = apply(
       None, query, path
     )
 
-    def apply[E](entityVal: Option[E], queryParams: MultivaluedMap[String, String], pathParams: MultivaluedMap[String, String]): Entity[E] = new Entity[E] {
-      override def meta: MetaData = throw new UnsupportedOperationException // TODO
+    def apply[E](entityVal: Option[E], queryParams: MultivaluedMap[String, String], pathParams: MultivaluedMap[String, String]): RequestMeta[E] = new RequestMeta[E] {
+      override def auth(): AuthzMetadata = ???  // TODO
 
       override def segment(name: String): Option[String] = Option(pathParams.getFirst(name))
 
@@ -138,25 +112,10 @@ object Api {
     }
   }
 
-  object Get {
-    def apply[T](description: Description)(block: Parameters => Future[T])(implicit ec: ExecutionContext): GetOp[T] = new GetOp[T](description, block, ec)
-  }
-
-  object Put {
-    def apply[T, E](description: Description)(block: Entity[E] => Future[T])(implicit tag: TypeTag[E], ec: ExecutionContext): PutOp[T, E] = new PutOp[T, E](description, block, ec)
-  }
-
-  object Post {
-    def apply[T, E](description: Description)(block: Entity[E] => Future[T])(implicit tag: TypeTag[E], ec: ExecutionContext): PostOp[T, E] = new PostOp[T, E](description, block, ec)
-  }
-
-  object Delete {
-    def apply[T](description: Description)(block: Parameters => Future[T])(implicit ec: ExecutionContext): DeleteOp[T] = new DeleteOp[T](description, block, ec)
-  }
-
   trait TopLevel {
-    def description: Description
+    def meta: Meta
   }
 
   case class StatusResponse(statusCode: Int)
+  case class EntityStatusResponse[T](entity: T, statusCode: Int)
 }
