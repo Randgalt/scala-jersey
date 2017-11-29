@@ -12,32 +12,36 @@ class ApiResource extends TopLevel {
 
   override val path = "/hey"
 
-  val opGet = Op(
+  private val metaGet = Op(
     description = "test",
     nickname = "this-is-a-test-get",
     path = "{id}"
-  ) get { requestMeta =>
+  )
+  val opGet = metaGet get { requestMeta =>
     Future.successful(Model("me", 42, requestMeta.segment("id")))
   }
 
-  val opPut = Op(
+  private val metaPut = Op(
     description = "test",
     nickname = "this-is-a-test-put"
-  ) put { _: RequestMeta[Model] =>
+  )
+  val opPut = metaPut put { _: RequestMeta[Model] =>
     Future.successful(StatusResponse(Status.ACCEPTED.getStatusCode))
   }
 
-  val opPost = Op(
+  private val metaPost = Op(
     description = "test",
     nickname = "this-is-a-test-post"
-  ) post { requestMeta: RequestMeta[Model] =>
-    Future.successful(requestMeta.entity().map(_.name).getOrElse("dunno"))
+  )
+  val opPost = metaPost post { requestMeta: RequestMeta[Model] =>
+    Future.successful(requestMeta.entity.map(_.name).getOrElse("dunno"))
   }
 
-  val opDelete = Op(
+  private val metaDelete = Op(
     description = "test",
     nickname = "this-is-a-test-delete"
-  ) delete { _ =>
+  )
+  val opDelete = metaDelete delete { _ =>
     Future.successful(StatusResponse(Status.ACCEPTED.getStatusCode))
   }
 }

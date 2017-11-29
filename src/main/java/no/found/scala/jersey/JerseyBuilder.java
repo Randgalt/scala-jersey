@@ -35,7 +35,6 @@ public class JerseyBuilder {
                 Operation operation = new Operation();
                 operation.addConsumes(MediaType.APPLICATION_JSON);
                 operation.addProduces(MediaType.APPLICATION_JSON);
-                operation.setOperationId(topLevel.nickname());
                 Path path = new Path();
                 path.set(op.method().toLowerCase(), operation);
                 swagger.path(op.op().nickname(), path);

@@ -31,15 +31,15 @@ public class JerseyScalaInflector {
         MultivaluedMap<String, String> queryParams = request.getUriInfo().getQueryParameters();
         MultivaluedMap<String, String> pathParams = request.getUriInfo().getPathParameters();
         Future future;
+        Option<Object> entityOption;
         if (op.hasEntity()) {
-            Class aClass = op.entityClass();
-            Object entity = request.readEntity(aClass);
-            Api.RequestMeta requestMeta = Api.RequestMeta$.MODULE$.apply(Option.apply(entity), queryParams, pathParams);
-            future = op.apply(requestMeta);
+            Object entity = request.readEntity(op.entityClass());
+            entityOption = Option.apply(entity);
         } else {
-            Api.RequestMeta requestMeta = Api.RequestMeta$.MODULE$.apply(queryParams, pathParams);
-            future = op.apply(requestMeta);
+            entityOption = Option.empty();
         }
+        Api.RequestMeta requestMeta = Api.RequestMeta$.MODULE$.apply(entityOption, queryParams, pathParams, request, response);
+        future = op.apply(requestMeta);
         op.complete(future, response);
     }
 }
