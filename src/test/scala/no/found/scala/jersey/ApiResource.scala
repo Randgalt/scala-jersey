@@ -12,20 +12,20 @@ import scala.concurrent.Future
 class ApiResource extends TopLevel {
   override val path = "/hey"
 
-  val opGet: Route = get("/{id}") { requestMeta =>
+  private val opGet = childPath("/{id}") get { requestMeta =>
     val bd = requestMeta.injected(classOf[BigDecimal])
     Future.successful(Model("me", bd.intValue(), requestMeta.segment("id")))
   }
 
-  val opPut: Route = put { _: RequestMeta[Model] =>
+  private val opPut = put { _: RequestMeta[Model] =>
     Future.successful(StatusResponse(Status.ACCEPTED.getStatusCode))
   }
 
-  val opPost: Route = post { requestMeta: RequestMeta[Model] =>
+  private val opPost = post { requestMeta: RequestMeta[Model] =>
     Future.successful(requestMeta.entity.map(_.name).getOrElse("dunno"))
   }
 
-  val opDelete: Route = delete { _ =>
+  private val opDelete = delete { _ =>
     Future.successful(StatusResponse(Status.ACCEPTED.getStatusCode))
   }
 

@@ -7,34 +7,72 @@ import org.glassfish.jersey.internal.inject.InjectionManager
 import org.glassfish.jersey.server.ContainerRequest
 
 import scala.concurrent.{ExecutionContext, Future}
+import scala.reflect.runtime.universe
+import scala.reflect.runtime.universe.TypeTag
 import scala.util.control.NonFatal
 
-object Routes {
-  import reflect.runtime.universe.TypeTag
-
-  sealed trait RequestMeta[E] {
-    val request: ContainerRequestContext
-
-    val response: AsyncResponse
-
-    val injectionManager: InjectionManager
-
-    val entity: Option[E] = None
+sealed trait Verbs {
+  def get[T](block: RequestMeta[Any] => Future[T])(implicit ec: ExecutionContext): Route = {
+    verb[T, Any]("GET")(block)
   }
 
-  sealed trait Route {
-    val method: String
-    val path: String
-
-    def processRequest(request: ContainerRequest, response: AsyncResponse, injectionManager: InjectionManager): Unit
+  def head[T](block: RequestMeta[Any] => Future[T])(implicit ec: ExecutionContext): Route = {
+    verb("HEAD")(block)
   }
 
-  trait TopLevel {
-    val path: String = "/"
-
-    def routes(): Seq[Route]
+  def options[T](block: RequestMeta[Any] => Future[T])(implicit ec: ExecutionContext): Route = {
+    verb("OPTIONS")(block)
   }
 
+  def put[T, E](block: RequestMeta[E] => Future[T])(implicit tag: TypeTag[E], ec: ExecutionContext): Route = {
+    verbEntity("PUT")(block)
+  }
+
+  def post[T, E](block: RequestMeta[E] => Future[T])(implicit tag: TypeTag[E], ec: ExecutionContext): Route = {
+    verbEntity("POST")(block)
+  }
+
+  def patch[T, E](block: RequestMeta[E] => Future[T])(implicit tag: TypeTag[E], ec: ExecutionContext): Route = {
+    verbEntity("PATCH")(block)
+  }
+
+  def delete[T](block: RequestMeta[Any] => Future[T])(implicit ec: ExecutionContext): Route = {
+    verb("DELETE")(block)
+  }
+
+  def verb[T, E](method: String)(block: RequestMeta[E] => Future[T])(implicit ec: ExecutionContext): Route
+
+  def verbEntity[T, E](method: String)(block: RequestMeta[E] => Future[T])(implicit tag: TypeTag[E], ec: ExecutionContext): Route
+}
+
+sealed trait RequestMeta[E] {
+  val request: ContainerRequestContext
+
+  val response: AsyncResponse
+
+  val injectionManager: InjectionManager
+
+  val entity: Option[E] = None
+}
+
+sealed trait Route {
+  val method: String
+  val path: String
+
+  def processRequest(request: ContainerRequest, response: AsyncResponse, injectionManager: InjectionManager): Unit
+}
+
+trait TopLevel {
+  val path: String = "/"
+
+  def routes(): Seq[Route]
+}
+
+case class StatusResponse(statusCode: Int)
+
+case class EntityStatusResponse[T](entity: T, statusCode: Int)
+
+object Routes extends Verbs {
   private class RouteBase[T, E](
     override val method: String,
     override val path: String,
@@ -78,54 +116,31 @@ object Routes {
     }
   }
 
-  def get[T](block: RequestMeta[Any] => Future[T])(implicit ec: ExecutionContext): Route = {
-    verb[T, Any]("GET")(block)
+  def childPath(path: String): Verbs = {
+    new Verbs {
+      override def verb[T, E](method: String)(block: RequestMeta[E] => Future[T])(implicit ec: ExecutionContext): Route = {
+        internalVerb(method, path, block, ec)
+      }
+
+      override def verbEntity[T, E](method: String)(block: RequestMeta[E] => Future[T])(implicit tag: universe.TypeTag[E], ec: ExecutionContext): Route = {
+        internalVerbEntity(method, path, block, tag, ec)
+      }
+    }
   }
 
-  def get[T](path: String)(block: RequestMeta[Any] => Future[T])(implicit ec: ExecutionContext): Route = {
-    verb[T, Any]("GET", path)(block)
+  override def verb[T, E](method: String)(block: RequestMeta[E] => Future[T])(implicit ec: ExecutionContext): Route = {
+    internalVerb(method, "/", block, ec)
   }
 
-  def head[T](block: RequestMeta[Any] => Future[T])(implicit ec: ExecutionContext): Route = {
-    verb("HEAD")(block)
+  override def verbEntity[T, E](method: String)(block: RequestMeta[E] => Future[T])(implicit tag: TypeTag[E], ec: ExecutionContext): Route = {
+    internalVerbEntity(method, "/", block, tag, ec)
   }
 
-  def head[T](path: String)(block: RequestMeta[Any] => Future[T])(implicit ec: ExecutionContext): Route = {
-    verb("HEAD", path)(block)
-  }
-
-  def put[T, E](block: RequestMeta[E] => Future[T])(implicit tag: TypeTag[E], ec: ExecutionContext): Route = {
-    verbEntity("PUT")(block)
-  }
-
-  def put[T, E](path: String)(block: RequestMeta[E] => Future[T])(implicit tag: TypeTag[E], ec: ExecutionContext): Route = {
-    verbEntity("PUT", path)(block)
-  }
-
-  def post[T, E](block: RequestMeta[E] => Future[T])(implicit tag: TypeTag[E], ec: ExecutionContext): Route = {
-    verbEntity("POST")(block)
-  }
-
-  def post[T, E](path: String)(block: RequestMeta[E] => Future[T])(implicit tag: TypeTag[E], ec: ExecutionContext): Route = {
-    verbEntity("POST", path)(block)
-  }
-
-  def delete[T](block: RequestMeta[Any] => Future[T])(implicit ec: ExecutionContext): Route = {
-    verb("DELETE")(block)
-  }
-
-  def delete[T](path: String)(block: RequestMeta[Any] => Future[T])(implicit ec: ExecutionContext): Route = {
-    verb("DELETE", path)(block)
-  }
-
-  def verb[T, E](method: String, path: String = "/")(block: RequestMeta[E] => Future[T])(implicit ec: ExecutionContext): Route = {
+  private def internalVerb[T, E](method: String, path: String, block: RequestMeta[E] => Future[T], ec: ExecutionContext): Route = {
     new RouteBase[T, E](method, path, None, block, ec)
   }
 
-  def verbEntity[T, E](method: String, path: String = "/")(block: RequestMeta[E] => Future[T])(implicit tag: TypeTag[E], ec: ExecutionContext): Route = {
+  private def internalVerbEntity[T, E](method: String, path: String, block: RequestMeta[E] => Future[T], tag: TypeTag[E], ec: ExecutionContext): Route = {
     new RouteBase[T, E](method, path, Some(tag), block, ec)
   }
-
-  case class StatusResponse(statusCode: Int)
-  case class EntityStatusResponse[T](entity: T, statusCode: Int)
 }

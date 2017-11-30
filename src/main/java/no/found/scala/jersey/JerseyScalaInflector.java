@@ -8,7 +8,7 @@ import javax.ws.rs.core.Context;
 import java.lang.reflect.Method;
 
 public class JerseyScalaInflector {
-    private final Routes.Route route;
+    private final Route route;
 
     static final Method method;
     static {
@@ -20,7 +20,7 @@ public class JerseyScalaInflector {
         }
     }
 
-    JerseyScalaInflector(Routes.Route route) {
+    JerseyScalaInflector(Route route) {
         this.route = route;
     }
 

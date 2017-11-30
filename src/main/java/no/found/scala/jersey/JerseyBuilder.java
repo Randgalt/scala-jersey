@@ -1,6 +1,5 @@
 package no.found.scala.jersey;
 
-import no.found.scala.jersey.Routes.TopLevel;
 import org.glassfish.jersey.server.model.Resource;
 import scala.collection.JavaConverters;
 
@@ -22,7 +21,7 @@ public class JerseyBuilder {
 
     @FunctionalInterface
     public interface ContentTypeMapper {
-        Collection<MediaType> types(TopLevel topLevel, Routes.Route route);
+        Collection<MediaType> types(TopLevel topLevel, Route route);
     }
 
     public JerseyBuilder() {
@@ -49,7 +48,7 @@ public class JerseyBuilder {
         return resourceBuilder.build();
     }
 
-    private static Collection<Routes.Route> getRoutes(TopLevel topLevel) {
+    private static Collection<Route> getRoutes(TopLevel topLevel) {
         return JavaConverters.asJavaCollectionConverter(topLevel.routes()).asJavaCollection();
     }
 }
