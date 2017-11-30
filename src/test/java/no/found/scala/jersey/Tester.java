@@ -1,5 +1,6 @@
 package no.found.scala.jersey;
 
+import org.glassfish.hk2.utilities.binding.AbstractBinder;
 import org.glassfish.jersey.CommonProperties;
 import org.glassfish.jersey.client.ClientConfig;
 import org.glassfish.jersey.jackson.JacksonFeature;
@@ -11,6 +12,7 @@ import scala.Option;
 
 import javax.ws.rs.client.Entity;
 import javax.ws.rs.core.Application;
+import java.math.BigDecimal;
 
 public class Tester extends JerseyTest {
     @Test
@@ -35,10 +37,19 @@ public class Tester extends JerseyTest {
     @Override
     protected Application configure() {
         ResourceConfig resourceConfig = new ResourceConfig();
-        resourceConfig.registerResources(JerseyBuilder.buildResource(new ApiResource()));
+        resourceConfig.registerResources(new JerseyBuilder().buildResource(new ApiResource()));
         resourceConfig.register(JacksonMarshallingFeature.class);
         resourceConfig.register(JacksonFeature.class);
         resourceConfig.property(CommonProperties.FEATURE_AUTO_DISCOVERY_DISABLE, Boolean.TRUE);
+
+        AbstractBinder binder = new AbstractBinder() {
+            @Override
+            protected void configure() {
+                bind(BigDecimal.TEN).to(BigDecimal.class);
+            }
+        };
+        resourceConfig.register(binder);
+
         return resourceConfig;
     }
 }

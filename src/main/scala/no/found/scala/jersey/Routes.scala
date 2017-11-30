@@ -3,7 +3,7 @@ package no.found.scala.jersey
 import javax.ws.rs.container.{AsyncResponse, ContainerRequestContext}
 import javax.ws.rs.core.Response
 
-import no.found.adminconsole.api.v1.util.AuthModel.AuthzMetadata
+import org.glassfish.jersey.internal.inject.InjectionManager
 import org.glassfish.jersey.server.ContainerRequest
 
 import scala.concurrent.{ExecutionContext, Future}
@@ -13,11 +13,11 @@ object Routes {
   import reflect.runtime.universe.TypeTag
 
   sealed trait RequestMeta[E] {
-    val auth: AuthzMetadata
-
-    val requestContext: ContainerRequestContext
+    val request: ContainerRequestContext
 
     val response: AsyncResponse
+
+    val injectionManager: InjectionManager
 
     val entity: Option[E] = None
   }
@@ -26,7 +26,13 @@ object Routes {
     val method: String
     val path: String
 
-    def processRequest(request: ContainerRequest, response: AsyncResponse): Unit
+    def processRequest(request: ContainerRequest, response: AsyncResponse, injectionManager: InjectionManager): Unit
+  }
+
+  trait TopLevel {
+    val path: String = "/"
+
+    def routes(): Seq[Route]
   }
 
   private class RouteBase[T, E](
@@ -50,71 +56,74 @@ object Routes {
       }
     }
 
-    override def processRequest(request: ContainerRequest, response: AsyncResponse): Unit = {
+    override def processRequest(request: ContainerRequest, response: AsyncResponse, injectionManager: InjectionManager): Unit = {
       val entity = entityTag.map(tag => request.readEntity(entityClass()).asInstanceOf[E])
-      val requestMeta = RequestMeta(entity, request, response)
+      val requestMeta = RequestMeta(entity, request, response, injectionManager)
       val future = block(requestMeta)
       complete(future.asInstanceOf[Future[T]], response)
     }
   }
 
   private object RequestMeta {
-    def apply[E](entityVal: Option[E], requestArg: ContainerRequestContext, responseArg: AsyncResponse): RequestMeta[E] = new RequestMeta[E]
+    def apply[E](entityVal: Option[E], requestArg: ContainerRequestContext, responseArg: AsyncResponse, injectionManagerArg: InjectionManager):
+      RequestMeta[E] = new RequestMeta[E]
     {
-      override val auth: AuthzMetadata = null  // TODO
-
-      override val requestContext: ContainerRequestContext = requestArg
+      override val request: ContainerRequestContext = requestArg
 
       override val response: AsyncResponse = responseArg
+
+      override val injectionManager: InjectionManager = injectionManagerArg
 
       override val entity: Option[E] = entityVal
     }
   }
 
   def get[T](block: RequestMeta[Any] => Future[T])(implicit ec: ExecutionContext): Route = {
-    get("/")(block)
+    verb[T, Any]("GET")(block)
   }
 
   def get[T](path: String)(block: RequestMeta[Any] => Future[T])(implicit ec: ExecutionContext): Route = {
-    new RouteBase[T, Any]("GET", path, None, block, ec)
+    verb[T, Any]("GET", path)(block)
+  }
+
+  def head[T](block: RequestMeta[Any] => Future[T])(implicit ec: ExecutionContext): Route = {
+    verb("HEAD")(block)
+  }
+
+  def head[T](path: String)(block: RequestMeta[Any] => Future[T])(implicit ec: ExecutionContext): Route = {
+    verb("HEAD", path)(block)
   }
 
   def put[T, E](block: RequestMeta[E] => Future[T])(implicit tag: TypeTag[E], ec: ExecutionContext): Route = {
-    put("/")(block)
+    verbEntity("PUT")(block)
   }
 
   def put[T, E](path: String)(block: RequestMeta[E] => Future[T])(implicit tag: TypeTag[E], ec: ExecutionContext): Route = {
-    new RouteBase[T, E]("PUT", path, Some(tag), block, ec)
+    verbEntity("PUT", path)(block)
   }
 
   def post[T, E](block: RequestMeta[E] => Future[T])(implicit tag: TypeTag[E], ec: ExecutionContext): Route = {
-    post("/")(block)
+    verbEntity("POST")(block)
   }
 
   def post[T, E](path: String)(block: RequestMeta[E] => Future[T])(implicit tag: TypeTag[E], ec: ExecutionContext): Route = {
-    new RouteBase[T, E]("POST", path, Some(tag), block, ec)
+    verbEntity("POST", path)(block)
   }
 
   def delete[T](block: RequestMeta[Any] => Future[T])(implicit ec: ExecutionContext): Route = {
-    delete("/")(block)
+    verb("DELETE")(block)
   }
 
   def delete[T](path: String)(block: RequestMeta[Any] => Future[T])(implicit ec: ExecutionContext): Route = {
-    new RouteBase[T, Any]("DELETE", path, None, block, ec)
+    verb("DELETE", path)(block)
   }
 
-  def verb[T](method: String, path: String = "/")(block: RequestMeta[Any] => Future[T])(implicit ec: ExecutionContext): Route = {
-    new RouteBase[T, Any](method, path, None, block, ec)
+  def verb[T, E](method: String, path: String = "/")(block: RequestMeta[E] => Future[T])(implicit ec: ExecutionContext): Route = {
+    new RouteBase[T, E](method, path, None, block, ec)
   }
 
   def verbEntity[T, E](method: String, path: String = "/")(block: RequestMeta[E] => Future[T])(implicit tag: TypeTag[E], ec: ExecutionContext): Route = {
     new RouteBase[T, E](method, path, Some(tag), block, ec)
-  }
-
-  trait TopLevel {
-    val path: String = "/"
-
-    def routes(): Seq[Route]
   }
 
   case class StatusResponse(statusCode: Int)

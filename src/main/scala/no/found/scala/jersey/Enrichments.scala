@@ -1,7 +1,7 @@
 package no.found.scala.jersey
 
-import javax.ws.rs.container.ContainerRequestContext
-import javax.ws.rs.core.MultivaluedMap
+import java.lang.reflect.Type
+import javax.ws.rs.core.{Cookie, MultivaluedMap}
 
 import no.found.scala.jersey.Routes.RequestMeta
 
@@ -12,27 +12,37 @@ object Enrichments {
     }
   }
 
-  implicit class GetPathSegment(context: ContainerRequestContext) {
+  implicit class GetPathSegment(requestMeta: RequestMeta[_]) {
     def segment(id: String): Option[String] = {
-      context.getUriInfo.getPathParameters().value(id)
+      requestMeta.request.getUriInfo.getPathParameters().value(id)
     }
   }
 
-  implicit class GetPathSegmentFromRequestMeta(requestMeta: RequestMeta[_]) {
-    def segment(id: String): Option[String] = {
-      requestMeta.requestContext.segment(id)
-    }
-  }
-
-  implicit class GetQueryParameter(context: ContainerRequestContext) {
+  implicit class GetQueryParameter(requestMeta: RequestMeta[_]) {
     def query(id: String): Option[String] = {
-      context.getUriInfo.getQueryParameters().value(id)
+      requestMeta.request.getUriInfo.getQueryParameters().value(id)
     }
   }
 
-  implicit class GetQueryParameterFromRequestMeta(requestMeta: RequestMeta[_]) {
-    def query(id: String): Option[String] = {
-      requestMeta.requestContext.query(id)
+  implicit class GetHeaderParameter(requestMeta: RequestMeta[_]) {
+    def header(name: String): Option[String] = {
+      requestMeta.request.getHeaders.value(name)
+    }
+  }
+
+  implicit class GetCookie(requestMeta: RequestMeta[_]) {
+    def cookie(name: String): Option[Cookie] = {
+      Option(requestMeta.request.getCookies.get(name))
+    }
+  }
+
+  implicit class GetInjected(requestMeta: RequestMeta[_]) {
+    def injected[T](clazz: Class[T]): T = {
+      requestMeta.injectionManager.getInstance(clazz)
+    }
+
+    def injected[T](t: Type): T = {
+      requestMeta.injectionManager.getInstance(t)
     }
   }
 }

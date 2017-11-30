@@ -1,5 +1,6 @@
 package no.found.scala.jersey;
 
+import org.glassfish.jersey.internal.inject.InjectionManager;
 import org.glassfish.jersey.server.ContainerRequest;
 
 import javax.ws.rs.container.AsyncResponse;
@@ -12,7 +13,7 @@ public class JerseyScalaInflector {
     static final Method method;
     static {
         try {
-            method = JerseyScalaInflector.class.getMethod("handle", ContainerRequest.class, AsyncResponse.class);
+            method = JerseyScalaInflector.class.getMethod("handle", ContainerRequest.class, AsyncResponse.class, InjectionManager.class);
         } catch (NoSuchMethodException e) {
             // TODO log
             throw new RuntimeException(e);
@@ -24,7 +25,7 @@ public class JerseyScalaInflector {
     }
 
     @SuppressWarnings("unchecked")
-    public void handle(@Context ContainerRequest request, @Context AsyncResponse response) {
-        route.processRequest(request, response);
+    public void handle(@Context ContainerRequest request, @Context AsyncResponse response, @Context InjectionManager injectionManager) {
+        route.processRequest(request, response, injectionManager);
     }
 }
