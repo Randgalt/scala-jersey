@@ -3,8 +3,6 @@ package no.found.scala.jersey
 import java.lang.reflect.Type
 import javax.ws.rs.core.{Cookie, MultivaluedMap}
 
-import no.found.scala.jersey.Routes.RequestMeta
-
 object Enrichments {
   implicit class GetFirstOptional(map: MultivaluedMap[String, String]) {
     def value(key: String): Option[String] = {

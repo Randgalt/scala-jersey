@@ -1,5 +1,6 @@
 package no.found.scala.jersey
 
+import javax.ws.rs.HttpMethod
 import javax.ws.rs.container.{AsyncResponse, ContainerRequestContext}
 import javax.ws.rs.core.Response
 
@@ -7,43 +8,8 @@ import org.glassfish.jersey.internal.inject.InjectionManager
 import org.glassfish.jersey.server.ContainerRequest
 
 import scala.concurrent.{ExecutionContext, Future}
-import scala.reflect.runtime.universe
 import scala.reflect.runtime.universe.TypeTag
 import scala.util.control.NonFatal
-
-sealed trait Verbs {
-  def get[T](block: RequestMeta[Any] => Future[T])(implicit ec: ExecutionContext): Route = {
-    verb[T, Any]("GET")(block)
-  }
-
-  def head[T](block: RequestMeta[Any] => Future[T])(implicit ec: ExecutionContext): Route = {
-    verb("HEAD")(block)
-  }
-
-  def options[T](block: RequestMeta[Any] => Future[T])(implicit ec: ExecutionContext): Route = {
-    verb("OPTIONS")(block)
-  }
-
-  def put[T, E](block: RequestMeta[E] => Future[T])(implicit tag: TypeTag[E], ec: ExecutionContext): Route = {
-    verbEntity("PUT")(block)
-  }
-
-  def post[T, E](block: RequestMeta[E] => Future[T])(implicit tag: TypeTag[E], ec: ExecutionContext): Route = {
-    verbEntity("POST")(block)
-  }
-
-  def patch[T, E](block: RequestMeta[E] => Future[T])(implicit tag: TypeTag[E], ec: ExecutionContext): Route = {
-    verbEntity("PATCH")(block)
-  }
-
-  def delete[T](block: RequestMeta[Any] => Future[T])(implicit ec: ExecutionContext): Route = {
-    verb("DELETE")(block)
-  }
-
-  def verb[T, E](method: String)(block: RequestMeta[E] => Future[T])(implicit ec: ExecutionContext): Route
-
-  def verbEntity[T, E](method: String)(block: RequestMeta[E] => Future[T])(implicit tag: TypeTag[E], ec: ExecutionContext): Route
-}
 
 sealed trait RequestMeta[E] {
   val request: ContainerRequestContext
@@ -72,7 +38,7 @@ case class StatusResponse(statusCode: Int)
 
 case class EntityStatusResponse[T](entity: T, statusCode: Int)
 
-object Routes extends Verbs {
+object Routes {
   private class RouteBase[T, E](
     override val method: String,
     override val path: String,
@@ -116,31 +82,21 @@ object Routes extends Verbs {
     }
   }
 
-  def childPath(path: String): Verbs = {
-    new Verbs {
-      override def verb[T, E](method: String)(block: RequestMeta[E] => Future[T])(implicit ec: ExecutionContext): Route = {
-        internalVerb(method, path, block, ec)
-      }
+  case class Method(verb: String)
 
-      override def verbEntity[T, E](method: String)(block: RequestMeta[E] => Future[T])(implicit tag: universe.TypeTag[E], ec: ExecutionContext): Route = {
-        internalVerbEntity(method, path, block, tag, ec)
-      }
-    }
+  val get = Method(HttpMethod.GET)
+  val put = Method(HttpMethod.PUT)
+  val post = Method(HttpMethod.POST)
+  val delete = Method(HttpMethod.DELETE)
+  val head = Method(HttpMethod.HEAD)
+  val patch = Method(HttpMethod.PATCH)
+  val options = Method(HttpMethod.OPTIONS)
+
+  def route[T](method: Method, path: String = "/")(block: RequestMeta[Any] => Future[T])(implicit ec: ExecutionContext): Route = {
+    new RouteBase[T, Any](method.verb, path, None, block, ec)
   }
 
-  override def verb[T, E](method: String)(block: RequestMeta[E] => Future[T])(implicit ec: ExecutionContext): Route = {
-    internalVerb(method, "/", block, ec)
-  }
-
-  override def verbEntity[T, E](method: String)(block: RequestMeta[E] => Future[T])(implicit tag: TypeTag[E], ec: ExecutionContext): Route = {
-    internalVerbEntity(method, "/", block, tag, ec)
-  }
-
-  private def internalVerb[T, E](method: String, path: String, block: RequestMeta[E] => Future[T], ec: ExecutionContext): Route = {
-    new RouteBase[T, E](method, path, None, block, ec)
-  }
-
-  private def internalVerbEntity[T, E](method: String, path: String, block: RequestMeta[E] => Future[T], tag: TypeTag[E], ec: ExecutionContext): Route = {
-    new RouteBase[T, E](method, path, Some(tag), block, ec)
+  def routeEntity[T, E](method: Method, path: String = "/")(block: RequestMeta[E] => Future[T])(implicit tag: TypeTag[E], ec: ExecutionContext): Route = {
+    new RouteBase[T, E](method.verb, path, Some(tag), block, ec)
   }
 }
