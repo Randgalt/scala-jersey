@@ -44,7 +44,7 @@ public class JerseyBuilder {
                 .managedAsync()
                 .consumes(consumesMapper.types(topLevel, route))
                 .produces(producesMapper.types(topLevel, route))
-                .handledBy(new JerseyScalaInflector(route), JerseyScalaInflector.method));
+                .handledBy(new JerseyScalaInflector(topLevel, route), JerseyScalaInflector.method));
         return resourceBuilder.build();
     }
 

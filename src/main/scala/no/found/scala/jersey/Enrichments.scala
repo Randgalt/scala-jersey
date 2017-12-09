@@ -1,6 +1,7 @@
 package no.found.scala.jersey
 
 import java.lang.reflect.Type
+import java.security.Principal
 import javax.ws.rs.core.{Cookie, MultivaluedMap}
 
 object Enrichments {
@@ -41,6 +42,24 @@ object Enrichments {
 
     def injected[T](t: Type): T = {
       requestMeta.injectionManager.getInstance(t)
+    }
+  }
+
+  implicit class SecurityContextOptionals(requestMeta: RequestMeta[_]) {
+    def userPrincipal: Option[Principal] = {
+      Option(requestMeta.request.getSecurityContext).map(_.getUserPrincipal)
+    }
+
+    def isUserInRole(role: String): Boolean = {
+      (requestMeta.request.getSecurityContext != null) && requestMeta.request.getSecurityContext.isUserInRole(role)
+    }
+
+    def isSecure: Boolean = {
+      (requestMeta.request.getSecurityContext != null) && requestMeta.request.getSecurityContext.isSecure
+    }
+
+    def authenticationScheme: Option[String] = {
+      Option(requestMeta.request.getSecurityContext).map(_.getAuthenticationScheme)
     }
   }
 }

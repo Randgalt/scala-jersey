@@ -1,12 +1,14 @@
 package no.found.scala.jersey
 
-import javax.ws.rs.HttpMethod
+import javax.ws.rs.{ForbiddenException, HttpMethod}
 import javax.ws.rs.container.{AsyncResponse, ContainerRequestContext}
 import javax.ws.rs.core.Response
 
 import org.glassfish.jersey.internal.inject.InjectionManager
 import org.glassfish.jersey.server.ContainerRequest
+import org.glassfish.jersey.server.internal.LocalizationMessages
 
+import scala.collection.Seq
 import scala.concurrent.{ExecutionContext, Future}
 import scala.reflect.runtime.universe.TypeTag
 import scala.util.control.NonFatal
@@ -21,15 +23,25 @@ sealed trait RequestMeta[E] {
   val entity: Option[E] = None
 }
 
+sealed class TopLevelRole
+class DenyAll extends TopLevelRole
+class PermitAll extends TopLevelRole
+
 sealed trait Route {
   val method: String
   val path: String
+  val roles: Option[Seq[String]]
 
   def processRequest(request: ContainerRequest, response: AsyncResponse, injectionManager: InjectionManager): Unit
+
+  def checkRoles(topLevelRole: Option[TopLevelRole], request: ContainerRequest): Unit
+
+  def withRoles(roles: Seq[String]): Route
 }
 
 trait TopLevel {
   val path: String = "/"
+  val role: Option[TopLevelRole] = None
 
   def routes(): Seq[Route]
 }
@@ -44,7 +56,8 @@ object Routes {
     override val path: String,
     val entityTag: Option[TypeTag[E]],
     block: RequestMeta[E] => Future[T],
-    implicit val ec: ExecutionContext
+    implicit val ec: ExecutionContext,
+    override val roles: Option[Seq[String]] = None
   ) extends Route {
     private def entityClass(): Class[_] = entityTag.map(tag => tag.mirror.runtimeClass(tag.tpe.typeSymbol.asClass)).getOrElse(throw new UnsupportedOperationException)
 
@@ -65,6 +78,29 @@ object Routes {
       val requestMeta = RequestMeta(entity, request, response, injectionManager)
       val future = block(requestMeta)
       complete(future.asInstanceOf[Future[T]], response)
+    }
+
+    override def withRoles(roles: Seq[String]): Route = {
+      new RouteBase[T, E](method, path, entityTag, block, ec, Some(roles))
+    }
+
+    override def checkRoles(topLevelRole: Option[TopLevelRole], request: ContainerRequest): Unit = {
+      // see RolesAllowedDynamicFeature.RolesAllowedRequestFilter
+      val localRoles = topLevelRole match {
+        case Some(_: DenyAll) => Some(Seq.empty)
+        case Some(_: PermitAll) => None
+        case _ => roles
+      }
+
+      if ( localRoles.nonEmpty ) {
+        if ( request.getSecurityContext.getUserPrincipal == null ) {
+          throw new ForbiddenException(LocalizationMessages.USER_NOT_AUTHORIZED)
+        }
+
+        if ( !localRoles.exists(roleNames => roleNames.exists(role => request.getSecurityContext.isUserInRole(role))) ) {
+          throw new ForbiddenException(LocalizationMessages.USER_NOT_AUTHORIZED)
+        }
+      }
     }
   }
 

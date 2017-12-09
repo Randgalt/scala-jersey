@@ -29,5 +29,10 @@ class ApiResource extends TopLevel {
     Future.successful(StatusResponse(Status.ACCEPTED.getStatusCode))
   }
 
-  override def routes() = Seq(opGet, opPut, opPost, opDelete)
+  override def routes() = Seq(
+    opGet,
+    opPut,
+    opPost,
+    opDelete
+  )
 }

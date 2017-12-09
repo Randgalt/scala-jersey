@@ -8,6 +8,7 @@ import javax.ws.rs.core.Context;
 import java.lang.reflect.Method;
 
 public class JerseyScalaInflector {
+    private final TopLevel topLevel;
     private final Route route;
 
     static final Method method;
@@ -20,12 +21,15 @@ public class JerseyScalaInflector {
         }
     }
 
-    JerseyScalaInflector(Route route) {
+    JerseyScalaInflector(TopLevel topLevel, Route route) {
+        this.topLevel = topLevel;
         this.route = route;
     }
 
     @SuppressWarnings("unchecked")
     public void handle(@Context ContainerRequest request, @Context AsyncResponse response, @Context InjectionManager injectionManager) {
+        route.checkRoles(topLevel.role(), request);
+
         route.processRequest(request, response, injectionManager);
     }
 }
